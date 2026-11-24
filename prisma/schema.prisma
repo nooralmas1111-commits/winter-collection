@@ -1,0 +1,309 @@
+// ===================================================
+// FROST & FLAIR — Complete Prisma Relational Schema
+// ===================================================
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum PaymentMethod {
+  COD
+  CARD
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+// 1. User Model
+model User {
+  id           String      @id @default(cuid())
+  name         String
+  email        String      @unique
+  passwordHash String
+  phone        String?
+  role         Role        @default(CUSTOMER)
+  image        String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  orders       Order[]
+  cart         Cart?
+  wishlist     Wishlist?
+  addresses    Address[]
+  reviews      Review[]
+
+  @@index([email])
+}
+
+// 2. Category Model (with self-referencing hierarchy)
+model Category {
+  id          String      @id @default(cuid())
+  name        String
+  slug        String      @unique
+  description String?
+  image       String?
+  parentId    String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  parent      Category?   @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[]  @relation("CategoryHierarchy")
+  products    Product[]
+
+  @@index([slug])
+  @@index([parentId])
+}
+
+// 3. Product Model
+model Product {
+  id               String           @id @default(cuid())
+  name             String
+  slug             String           @unique
+  description      String
+  shortDescription String?
+  price            Decimal          @db.Decimal(10, 2)
+  compareAtPrice   Decimal?         @db.Decimal(10, 2)
+  sku              String?
+  categoryId       String
+  brand            String           @default("FROST & FLAIR")
+  featured         Boolean          @default(false)
+  bestSeller       Boolean          @default(false)
+  newArrival       Boolean          @default(false)
+  status           ProductStatus    @default(ACTIVE)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  category         Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  variants         ProductVariant[]
+  images           ProductImage[]
+  cartItems        CartItem[]
+  wishlistItems    WishlistItem[]
+  orderItems       OrderItem[]
+  reviews          Review[]
+
+  @@index([slug])
+  @@index([categoryId])
+  @@index([featured])
+  @@index([bestSeller])
+  @@index([newArrival])
+}
+
+// 4. ProductVariant Model (Size & Color specific inventory)
+model ProductVariant {
+  id            String      @id @default(cuid())
+  productId     String
+  size          String
+  color         String
+  colorCode     String
+  sku           String?     @unique
+  stockQuantity Int         @default(0)
+  price         Decimal?    @db.Decimal(10, 2)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cartItems     CartItem[]
+  orderItems    OrderItem[]
+
+  @@index([productId])
+}
+
+// 5. ProductImage Model
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId String
+  imageUrl  String
+  altText   String?
+  isPrimary Boolean  @default(false)
+  sortOrder Int      @default(0)
+
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+// 6. Cart Model
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+}
+
+// 7. CartItem Model
+model CartItem {
+  id        String          @id @default(cuid())
+  cartId    String
+  productId String
+  variantId String?
+  quantity  Int             @default(1)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  cart      Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([cartId])
+  @@index([productId])
+  @@index([variantId])
+}
+
+// 8. Wishlist Model
+model Wishlist {
+  id        String         @id @default(cuid())
+  userId    String         @unique
+  createdAt DateTime       @default(now())
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     WishlistItem[]
+}
+
+// 9. WishlistItem Model
+model WishlistItem {
+  id         String   @id @default(cuid())
+  wishlistId String
+  productId  String
+  createdAt  DateTime @default(now())
+
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([wishlistId, productId])
+  @@index([wishlistId])
+}
+
+// 10. Address Model
+model Address {
+  id          String   @id @default(cuid())
+  userId      String
+  fullName    String
+  phone       String
+  addressLine String
+  city        String
+  state       String?
+  postalCode  String?
+  country     String   @default("Pakistan")
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// 11. Order Model
+model Order {
+  id              String        @id @default(cuid())
+  orderNumber     String        @unique
+  userId          String?
+  subtotal        Decimal       @db.Decimal(10, 2)
+  discount        Decimal       @default(0) @db.Decimal(10, 2)
+  shippingCost    Decimal       @default(0) @db.Decimal(10, 2)
+  totalAmount     Decimal       @db.Decimal(10, 2)
+  couponCode      String?
+  paymentMethod   PaymentMethod @default(COD)
+  paymentStatus   PaymentStatus @default(PENDING)
+  orderStatus     OrderStatus   @default(CONFIRMED)
+  shippingAddress Json
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  user            User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  items           OrderItem[]
+
+  @@index([orderNumber])
+  @@index([userId])
+  @@index([orderStatus])
+}
+
+// 12. OrderItem Model (Permanent historical snapshot)
+model OrderItem {
+  id            String          @id @default(cuid())
+  orderId       String
+  productId     String?
+  variantId     String?
+  productName   String
+  selectedSize  String
+  selectedColor String
+  quantity      Int
+  unitPrice     Decimal         @db.Decimal(10, 2)
+  totalPrice    Decimal         @db.Decimal(10, 2)
+
+  order         Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product       Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variant       ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+}
+
+// 13. Review Model
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  rating    Int
+  comment   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([userId])
+}
+
+// 14. Coupon Model
+model Coupon {
+  id                 String       @id @default(cuid())
+  code               String       @unique
+  discountType       DiscountType @default(PERCENTAGE)
+  discountValue      Decimal      @db.Decimal(10, 2)
+  minimumOrderAmount Decimal?     @db.Decimal(10, 2)
+  maximumDiscount    Decimal?     @db.Decimal(10, 2)
+  expiresAt          DateTime?
+  isActive           Boolean      @default(true)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@index([code])
+}
