@@ -4,6 +4,8 @@ import { requireAdmin } from "@/lib/auth";
 import { createProductSchema } from "@/lib/validations/product";
 import { Prisma, ProductStatus } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);

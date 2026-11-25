@@ -4,6 +4,8 @@ import { hashPassword, signSessionToken, setSessionCookie } from "@/lib/auth";
 import { registerSchema } from "@/lib/validations/auth";
 import { Role } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();

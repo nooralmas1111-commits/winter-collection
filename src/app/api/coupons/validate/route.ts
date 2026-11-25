@@ -3,6 +3,8 @@ import prisma from "@/lib/prisma";
 import { validateCouponSchema } from "@/lib/validations/coupon";
 import { DiscountType } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
